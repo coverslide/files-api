@@ -1,0 +1,16 @@
+{
+  "name": "files-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "node-7z": "^0.4.0",
+    "tar.gz": "^1.0.7",
+    "tmp": "0.0.33"
+  }
+}

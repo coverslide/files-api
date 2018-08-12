@@ -28,7 +28,7 @@ server.on('request', async (req, res) => {
       return res.end("");
     }
     const url = new URL(req.url, `http://${req.headers.host}`);
-    const fullpath = path.join(fileroot, decodeURI(url.pathname));
+    const fullpath = path.join(fileroot, decodeURIComponent(url.pathname));
     const action = url.searchParams.get('action');
     const download = url.searchParams.get('download') === 'true';
     const disposition = download ? 'attachment' : 'inline';
@@ -63,7 +63,7 @@ server.on('request', async (req, res) => {
       stat.files = files;
       res.end(JSON.stringify(stat));
     } else if (action == "extract") {
-      const extract = decodeURIComponent(url.searchParams.get('extract'));
+      const extract = url.searchParams.get('extract');
       if (!extract) {
         throw new Error("`extract` param required");
       }

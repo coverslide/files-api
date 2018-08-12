@@ -68,7 +68,7 @@ server.on('request', async (req, res) => {
         throw new Error("`extract` param required");
       }
       const dir = await tmpdirAsync();
-      const command = '7z e "' + fullpath + '" "' + extract + '" -o"' + dir.path + '" ';
+      const command = '7z x "' + fullpath + '" "' + extract + '" -o"' + dir.path + '" ';
       const s = await s7zrun(command);
 
       const extractedPath = path.join(dir.path, extract);

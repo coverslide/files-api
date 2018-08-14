@@ -3,20 +3,11 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const targz = require('tar.gz');
-const s7z = require('node-7z');
-const s7zrun = require('node-7z/util/run');
-const tmp = require('tmp');
+const sevenzip = require('sevenzip');
 
 const fileroot = process.argv[2] || process.env.ROOT || '.';
 
 const server = http.createServer();
-
-const tmpdirAsync = () => new Promise((resolve, reject) => {
-  tmp.dir((err, path, callback) => {
-    if (err) return reject(err);
-    return resolve({ path, callback });
-  });
-});
 
 server.on('request', async (req, res) => {
   try {
@@ -51,15 +42,7 @@ server.on('request', async (req, res) => {
     } else if (action == "stat") {
       res.end(JSON.stringify(stat));
     } else if (action == "contents") {
-      const zip = new s7z();
-      const files = [];
-      const task = zip.list(fullpath)
-      task.progress(data => {
-        for (const file of data) {
-          files.push(file);
-        }
-      })
-      const stat = await task;
+      const files = await sevenzip.getFiles(fullpath);
       stat.files = files;
       res.end(JSON.stringify(stat));
     } else if (action == "extract") {
@@ -67,11 +50,8 @@ server.on('request', async (req, res) => {
       if (!extract) {
         throw new Error("`extract` param required");
       }
-      const dir = await tmpdirAsync();
-      const command = '7z x "' + fullpath + '" "' + extract + '" -o"' + dir.path + '" ';
-      const s = await s7zrun(command);
+      const extractedPath = await sevenzip.extractFile(fullpath, extract);
 
-      const extractedPath = path.join(dir.path, extract);
       const stat = await fsp.stat(extractedPath);
       res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(extract).replace(/\"/g, '\"')}"`)
       fs.createReadStream(extractedPath).pipe(res);

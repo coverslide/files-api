@@ -21,7 +21,7 @@ module.exports = (fileroot) => async (req, res) => {
     stat.filename = path.basename(fullpath);
     stat.directory = stat.isDirectory();
     if (action == "tar") {
-      res.setHeader("Content-Disposition", `attachment; filename="${path.basename(fullpath).replace(/\"/g, '\"')}.tar.gz"`)
+      res.setHeader("Content-Disposition", `attachment; filename="${path.basename(fullpath).replace(/\"/g, '\"')}.tar.gz"`);
       targz().createReadStream(fullpath).pipe(res);
     } else if (stat.directory) {
       stat.files = [];

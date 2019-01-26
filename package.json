@@ -1,6 +1,6 @@
 {
   "name": "files-api",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A simple JSON file API over http",
   "repository": "https://github.com/coverslide/files-api.git",
   "main": "app.js",
@@ -13,6 +13,7 @@
   "author": "Richard Hoffman <coverslide@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "mime": "^2.4.0",
     "sevenzip": "^1.0.5",
     "tar.gz": "^1.0.7"
   }

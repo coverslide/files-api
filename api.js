@@ -3,6 +3,7 @@ const fsp = fs.promises;
 const path = require('path');
 const targz = require('tar.gz');
 const sevenzip = require('sevenzip');
+const mime = require('mime');
 
 module.exports = (fileroot) => async (req, res) => {
   try {
@@ -46,12 +47,60 @@ module.exports = (fileroot) => async (req, res) => {
       }
       const extractedPath = await sevenzip.extractFile(fullpath, extract);
 
-      const stat = await fsp.stat(extractedPath);
-      res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(extract).replace(/\"/g, '\"')}"`)
-      fs.createReadStream(extractedPath).pipe(res);
+      const estat = await fsp.stat(extractedPath);
+
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Last-Modified", new Date(stat.mtimeMs).toUTCString());
+      res.setHeader("Content-Length", estat.size);
+      res.setHeader("Content-Type", mime.getType(path.extname(extractedPath)));
+
+      let rangeStart = 0;
+      let rangeEnd = Infinity;
+      if (req.headers.range) {
+        const [ units, start, end ] = /([^=+])=(\d+)-(\d*)/.exec(req.headers.range);
+        if (units == "bytes") {
+          rangeStart = parseInt(start, 10);
+          if (end.length) {
+            rangeEnd = parseInt(end, 10);
+          } else {
+            rangeEnd = estat.size;
+          }
+          res.setHeader("Content-Range", `${units} ${rangeStart}-${rangeEnd-1}/${estat.size}`);
+          res.setHeader("Content-Length", rangeEnd - rangeStart);
+          res.statusCode = 206;
+        }
+      } else {
+        res.setHeader("Content-Length", estat.size);
+        res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(extract).replace(/\"/g, '\"')}"`);
+      }
+
+      fs.createReadStream(extractedPath, { start: rangeStart, end: rangeEnd }).pipe(res);
     } else {
-      res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(fullpath).replace(/\"/g, '\"')}"`)
-      fs.createReadStream(fullpath).pipe(res);
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Last-Modified", new Date(stat.mtimeMs).toUTCString());
+      res.setHeader("Content-Type", mime.getType(path.extname(fullpath)));
+
+      let rangeStart = 0;
+      let rangeEnd = Infinity;
+      if (req.headers.range) {
+        const [ , units, start, end ] = /([^=]+)=(\d+)-(\d*)/.exec(req.headers.range);
+        if (units == "bytes") {
+          rangeStart = parseInt(start, 10);
+          if (end.length) {
+            rangeEnd = parseInt(end, 10);
+          } else {
+            rangeEnd = stat.size;
+          }
+          res.setHeader("Content-Range", `${units} ${rangeStart}-${rangeEnd-1}/${stat.size}`);
+          res.setHeader("Content-Length", rangeEnd - rangeStart);
+          res.statusCode = 206;
+        }
+      } else {
+        res.setHeader("Content-Length", stat.size);
+        res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(fullpath).replace(/\"/g, '\"')}"`);
+      }
+
+      fs.createReadStream(fullpath, { start: rangeStart, end: rangeEnd }).pipe(res);
     }
   } catch (err) {
     const url = new URL(req.url, `http://${req.headers.host}`);

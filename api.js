@@ -57,7 +57,7 @@ module.exports = (fileroot) => async (req, res) => {
       let rangeStart = 0;
       let rangeEnd = Infinity;
       if (req.headers.range) {
-        const [ units, start, end ] = /([^=+])=(\d+)-(\d*)/.exec(req.headers.range);
+        const [ , units, start, end ] = /([^=+])=(\d+)-(\d*)/.exec(req.headers.range);
         if (units == "bytes") {
           rangeStart = parseInt(start, 10);
           if (end.length) {
@@ -91,8 +91,8 @@ module.exports = (fileroot) => async (req, res) => {
           } else {
             rangeEnd = stat.size;
           }
-          res.setHeader("Content-Range", `${units} ${rangeStart}-${rangeEnd-1}/${stat.size}`);
-          res.setHeader("Content-Length", rangeEnd - rangeStart);
+          res.setHeader("Content-Range", `${units} ${rangeStart}-${rangeEnd}/${stat.size}`);
+          res.setHeader("Content-Length", 1 + rangeEnd - rangeStart);
           res.statusCode = 206;
         }
       } else {

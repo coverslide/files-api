@@ -49,7 +49,6 @@ module.exports = (fileroot) => async (req, res) => {
 
       const estat = await fsp.stat(extractedPath);
 
-      res.setHeader("Accept-Ranges", "bytes");
       res.setHeader("Last-Modified", new Date(stat.mtimeMs).toUTCString());
       res.setHeader("Content-Length", estat.size);
       res.setHeader("Content-Type", mime.getType(path.extname(extractedPath)));
@@ -66,17 +65,17 @@ module.exports = (fileroot) => async (req, res) => {
             rangeEnd = estat.size;
           }
           res.setHeader("Content-Range", `${units} ${rangeStart}-${rangeEnd-1}/${estat.size}`);
-          res.setHeader("Content-Length", rangeEnd - rangeStart);
+          res.setHeader("Content-Length", Math.min(rangeEnd - rangeStart, stat.size));
           res.statusCode = 206;
         }
       } else {
+        res.setHeader("Accept-Ranges", "bytes");
         res.setHeader("Content-Length", estat.size);
         res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(extract).replace(/\"/g, '\"')}"`);
       }
 
       fs.createReadStream(extractedPath, { start: rangeStart, end: rangeEnd }).pipe(res);
     } else {
-      res.setHeader("Accept-Ranges", "bytes");
       res.setHeader("Last-Modified", new Date(stat.mtimeMs).toUTCString());
       res.setHeader("Content-Type", mime.getType(path.extname(fullpath)));
 
@@ -92,10 +91,11 @@ module.exports = (fileroot) => async (req, res) => {
             rangeEnd = stat.size;
           }
           res.setHeader("Content-Range", `${units} ${rangeStart}-${rangeEnd}/${stat.size}`);
-          res.setHeader("Content-Length", 1 + rangeEnd - rangeStart);
+          res.setHeader("Content-Length", Math.min(rangeEnd - rangeStart, stat.size));
           res.statusCode = 206;
         }
       } else {
+        res.setHeader("Accept-Ranges", "bytes");
         res.setHeader("Content-Length", stat.size);
         res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(fullpath).replace(/\"/g, '\"')}"`);
       }

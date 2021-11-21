@@ -1,7 +1,6 @@
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
-const targz = require('tar.gz');
 const sevenzip = require('sevenzip');
 const mime = require('mime');
 
@@ -21,10 +20,7 @@ module.exports = (fileroot) => async (req, res) => {
     const stat = await fsp.stat(fullpath);
     stat.filename = path.basename(fullpath);
     stat.directory = stat.isDirectory();
-    if (action == "tar") {
-      res.setHeader("Content-Disposition", `attachment; filename="${path.basename(fullpath).replace(/\"/g, '\"')}.tar.gz"`);
-      targz().createReadStream(fullpath).pipe(res);
-    } else if (stat.directory) {
+    if (stat.directory) {
       stat.files = [];
       const files = await fsp.readdir(fullpath);
       for (const file of files) {

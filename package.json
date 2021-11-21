@@ -13,8 +13,7 @@
   "author": "Richard Hoffman <coverslide@gmail.com>",
   "license": "ISC",
   "dependencies": {
-    "mime": "^2.4.4",
-    "sevenzip": "^1.0.5",
-    "tar.gz": "^1.0.7"
+    "mime": "^3.0.0",
+    "sevenzip": "^1.0.5"
   }
 }

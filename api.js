@@ -1,109 +1,160 @@
-const fs = require('fs');
-const fsp = fs.promises;
-const path = require('path');
-const sevenzip = require('sevenzip');
-const mime = require('mime');
+const fs = require('fs')
+const fsp = fs.promises
+const path = require('path')
+const { Transform } = require('stream')
+const SevenZip = require('sevenzip')
+const mime = require('mime')
+
+const sz = new SevenZip()
 
 module.exports = (fileroot) => async (req, res) => {
   try {
-    if (req.method == "HEAD" || req.method == "OPTIONS") {
-      return res.end("");
-    } else if (req.method != "GET") {
-      res.statusCode = 400;
-      return res.end("");
+    if (req.method === 'HEAD' || req.method === 'OPTIONS') {
+      return res.end('')
+    } else if (req.method !== 'GET') {
+      res.statusCode = 400
+      return res.end('')
     }
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const fullpath = path.join(fileroot, decodeURIComponent(url.pathname));
-    const action = url.searchParams.get('action');
-    const download = url.searchParams.get('download') === 'true';
-    const disposition = download ? 'attachment' : 'inline';
-    const stat = await fsp.stat(fullpath);
-    stat.filename = path.basename(fullpath);
-    stat.directory = stat.isDirectory();
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const fullpath = path.join(fileroot, decodeURIComponent(url.pathname))
+    const action = url.searchParams.get('action')
+    const download = url.searchParams.get('download') === 'true'
+    const disposition = download ? 'attachment' : 'inline'
+    const stat = await fsp.stat(fullpath)
+    stat.filename = path.basename(fullpath)
+    stat.directory = stat.isDirectory()
     if (stat.directory) {
-      stat.files = [];
-      const files = await fsp.readdir(fullpath);
+      stat.files = []
+      const files = await fsp.readdir(fullpath)
       for (const file of files) {
-        const filestat = await fsp.stat(path.join(fullpath, file));
-        filestat.filename = file;
-        filestat.directory = filestat.isDirectory();
-        stat.files.push(filestat);
+        const filestat = await fsp.stat(path.join(fullpath, file))
+        filestat.filename = file
+        filestat.directory = filestat.isDirectory()
+        stat.files.push(filestat)
       }
-      res.end(JSON.stringify(stat));
-    } else if (action == "stat") {
-      res.end(JSON.stringify(stat));
-    } else if (action == "contents") {
-      const files = await sevenzip.getFiles(fullpath);
-      stat.files = files;
-      res.end(JSON.stringify(stat));
-    } else if (action == "extract") {
-      const extract = url.searchParams.get('extract');
+      res.end(JSON.stringify(stat))
+    } else if (action === 'stat') {
+      res.end(JSON.stringify(stat))
+    } else if (action === 'contents') {
+      const sevenZipFiles = await sz.getFiles(fullpath)
+      stat.files = parseSevenZip(sevenZipFiles)
+      res.end(JSON.stringify(stat))
+    } else if (action === 'extract') {
+      const extract = url.searchParams.get('extract')
       if (!extract) {
-        throw new Error("`extract` param required");
+        throw new Error('`extract` param required')
       }
-      const extractedPath = await sevenzip.extractFile(fullpath, extract);
+      const estat = await sz.getSingleFile(fullpath, extract)
 
-      const estat = await fsp.stat(extractedPath);
+      res.setHeader('Last-Modified', new Date(stat.mtimeMs).toUTCString())
+      res.setHeader('Content-Length', estat.usize)
+      res.setHeader('Content-Type', mime.getType(path.extname(extract)))
 
-      res.setHeader("Last-Modified", new Date(stat.mtimeMs).toUTCString());
-      res.setHeader("Content-Length", estat.size);
-      res.setHeader("Content-Type", mime.getType(path.extname(extractedPath)));
-
-      let rangeStart = 0;
-      let rangeEnd = Infinity;
+      let rangeStart = 0
+      let rangeEnd = Infinity
       if (req.headers.range) {
-        const [ , units, start, end ] = /([^=+])=(\d+)-(\d*)/.exec(req.headers.range);
-        if (units == "bytes") {
-          rangeStart = parseInt(start, 10);
+        const [, units, start, end] = /([^=+])=(\d+)-(\d*)/.exec(req.headers.range)
+        if (units === 'bytes') {
+          rangeStart = parseInt(start, 10)
           if (end.length) {
-            rangeEnd = parseInt(end, 10);
+            rangeEnd = parseInt(end, 10)
           } else {
-            rangeEnd = estat.size;
+            rangeEnd = estat.size
           }
-          res.setHeader("Content-Range", `${units} ${rangeStart}-${rangeEnd-1}/${estat.size}`);
-          res.setHeader("Content-Length", Math.min(rangeEnd - rangeStart, stat.size));
-          res.statusCode = 206;
+          res.setHeader('Content-Range', `${units} ${rangeStart}-${rangeEnd - 1}/${estat.size}`)
+          res.setHeader('Content-Length', Math.min(rangeEnd - rangeStart, stat.size))
+          res.statusCode = 206
         }
       } else {
-        res.setHeader("Accept-Ranges", "bytes");
-        res.setHeader("Content-Length", estat.size);
-        res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(extract).replace(/\"/g, '\"')}"`);
+        const attachmentFilename = path.basename(fullpath).replace(/"/g, '"')
+        res.setHeader('Accept-Ranges', 'bytes')
+        res.setHeader('Content-Length', estat.size)
+        res.setHeader('Content-Disposition', `${disposition}; filename="${attachmentFilename}"`)
       }
 
-      fs.createReadStream(extractedPath, { start: rangeStart, end: rangeEnd }).pipe(res);
+      const stream = sz.extractFile(fullpath, extract)
+      stream.pipe(new RangeTransformStream({ start: rangeStart, end: rangeEnd })).pipe(res)
     } else {
-      res.setHeader("Last-Modified", new Date(stat.mtimeMs).toUTCString());
-      res.setHeader("Content-Type", mime.getType(path.extname(fullpath)));
+      res.setHeader('Last-Modified', new Date(stat.mtimeMs).toUTCString())
+      res.setHeader('Content-Type', mime.getType(path.extname(fullpath)))
 
-      let rangeStart = 0;
-      let rangeEnd = Infinity;
+      let rangeStart = 0
+      let rangeEnd = Infinity
       if (req.headers.range) {
-        const [ , units, start, end ] = /([^=]+)=(\d+)-(\d*)/.exec(req.headers.range);
-        if (units == "bytes") {
-          rangeStart = parseInt(start, 10);
+        const [, units, start, end] = /([^=]+)=(\d+)-(\d*)/.exec(req.headers.range)
+        if (units === 'bytes') {
+          rangeStart = parseInt(start, 10)
           if (end.length) {
-            rangeEnd = parseInt(end, 10);
+            rangeEnd = parseInt(end, 10)
           } else {
-            rangeEnd = stat.size;
+            rangeEnd = stat.size
           }
-          res.setHeader("Content-Range", `${units} ${rangeStart}-${rangeEnd}/${stat.size}`);
-          res.setHeader("Content-Length", Math.min(rangeEnd - rangeStart, stat.size));
-          res.statusCode = 206;
+          res.setHeader('Content-Range', `${units} ${rangeStart}-${rangeEnd}/${stat.size}`)
+          res.setHeader('Content-Length', Math.min(rangeEnd - rangeStart, stat.size))
+          res.statusCode = 206
         }
       } else {
-        res.setHeader("Accept-Ranges", "bytes");
-        res.setHeader("Content-Length", stat.size);
-        res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(fullpath).replace(/\"/g, '\"')}"`);
+        const attachmentFilename = path.basename(fullpath).replace(/"/g, '"')
+        res.setHeader('Accept-Ranges', 'bytes')
+        res.setHeader('Content-Length', stat.size)
+        res.setHeader('Content-Disposition', `${disposition}; filename="${attachmentFilename}"`)
       }
 
-      fs.createReadStream(fullpath, { start: rangeStart, end: rangeEnd }).pipe(res);
+      fs.createReadStream(fullpath, { start: rangeStart, end: rangeEnd }).pipe(res)
     }
   } catch (err) {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    if (url.pathname != "/favicon.ico") {
-      console.error(new Date(), err);
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    if (url.pathname !== '/favicon.ico') {
+      console.error(new Date(), err)
     }
-    res.statusCode = 404;
-    res.end(JSON.stringify({ error: err.message }));
+    res.statusCode = 404
+    res.end(JSON.stringify({ error: err.message }))
   }
-};
+}
+
+function parseSevenZip (sevenZipFiles) {
+  const files = []
+  for (const file of sevenZipFiles) {
+    const newFile = {}
+    newFile.name = file.Path
+    newFile.csize = files['Packed Size']
+    newFile.usize = files.Size
+    newFile.directory = files.Folder === '+'
+    newFile.mtime = files.Modified
+    files.push(newFile)
+  }
+  return files
+}
+
+class RangeTransformStream extends Transform {
+  elapsed = 0
+  finished = false
+  constructor (options) {
+    super(options)
+    this.start = options.start || 0
+    this.end = options.end || Infinity
+  }
+
+  _transform (chunk, encoding, callback) {
+    if (this.finished) {
+      this.push(null)
+      this.destroy()
+      return
+    }
+    const chunkSize = chunk.length
+    let chunkToWrite = chunk
+    this.elapsed += chunkSize
+    if (this.elapsed >= this.start) {
+      if (this.start - (this.elapsed - chunkSize) > 0) {
+        chunkToWrite = chunk.slice(this.start - (this.elapsed - chunkSize))
+      }
+      if (this.end <= this.elapsed) {
+        this.push(chunkToWrite.slice(0, chunkToWrite.length - (this.elapsed - this.end)))
+        this.finished = true
+      } else {
+        this.push(chunkToWrite)
+      }
+      callback()
+    }
+  }
+}

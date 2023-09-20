@@ -127,7 +127,7 @@ function parseSevenZip(sevenZipFiles) {
 	for (const file of sevenZipFiles) {
 		const newFile = {};
     const mTime = new Date(file.Modified);
-		newFile.name = file.Path;
+		newFile.filename = file.Path;
 		newFile.csize = file['Packed Size'];
 		newFile.usize = file.Size;
 		newFile.directory = file.Folder === '+';

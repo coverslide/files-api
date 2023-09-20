@@ -1,6 +1,6 @@
 {
   "name": "files-api",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "A simple JSON file API over http",
   "repository": "https://github.com/coverslide/files-api.git",
   "main": "api.js",
@@ -14,7 +14,7 @@
   "license": "ISC",
   "dependencies": {
     "mime": "^3.0.0",
-    "sevenzip": "^2.0.6"
+    "sevenzip": "^2.0.7"
   },
   "devDependencies": {
     "eslint": "^8.49.0",

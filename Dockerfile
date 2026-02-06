@@ -1,9 +1,16 @@
-FROM node:alpine
+FROM node:18-alpine
 
-RUN apk add p7zip
+RUN apk add --no-cache p7zip
 
-COPY . /app
-WORKDIR /app 
-RUN npm install
+WORKDIR /app
 
-ENTRYPOINT node app.js
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+
+EXPOSE 8087
+
+USER node
+
+ENTRYPOINT ["node", "app.js"]

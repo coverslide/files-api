@@ -1,6 +1,6 @@
 {
   "name": "files-api",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "A simple JSON file API over http",
   "repository": "https://github.com/coverslide/files-api.git",
   "main": "api.js",
